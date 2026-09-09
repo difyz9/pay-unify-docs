@@ -1,0 +1,17 @@
+{
+  "name": "pay-unify-docs",
+  "version": "1.0.0",
+  "description": "Pay-Unify 统一支付平台文档站（Rspress）",
+  "private": true,
+  "scripts": {
+    "dev": "rspress dev",
+    "build": "rspress build",
+    "preview": "rspress preview"
+  },
+  "dependencies": {
+    "rspress": "^1.47.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
