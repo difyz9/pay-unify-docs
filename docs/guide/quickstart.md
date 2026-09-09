@@ -40,8 +40,9 @@ CONFIG_FILE=config-local.toml go run main.go
 
 ### 启动后自动生成
 
-- **管理员账号**：`admin` / `admin123`（首次启动自动创建，`IsVip = true`）。
-- **OAuth2 种子应用**（scope = `admin`，仅测试用）：
+- **管理员账号**：`admin` / `admin123`（首次启动自动创建，`IsVip = true`，**内置为管理员**）。
+  > 安全说明：/api/v1 管理接口已做管理员鉴权（JWT 含 `isAdmin` 声明 + RequireAdmin 中间件），普通注册用户无法访问控制台接口；`admin123` 请上线前立即改密，生产建议关闭注册（`Auth.EnableRegister = false`）。
+- **OAuth2 种子应用**（scope = `admin`，**仅 `Debug = true` 环境自动创建**，生产不会生成）：
   - `test-app-001` / `test-secret-key-12345678901234567890`
   - `local-test` / `local-test-secret-32-chars-here-ok`
 - **健康检查**：`GET /health` → 200。

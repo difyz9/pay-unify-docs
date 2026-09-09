@@ -57,7 +57,7 @@ Pay-Unify 是一个**企业级统一支付服务平台**，由两个独立仓库
 
 | 前缀 | 认证 | 使用者 | 典型路由 |
 | --- | --- | --- | --- |
-| `/api/v1/*` | 管理员 **JWT**（`auth_token` Cookie / Bearer） | 前端管理后台 | `/api/v1/orders`、`/api/v1/payment/pay`、`/api/v1/payment/config/*`、`/api/v1/certs/*` |
+| `/api/v1/*` | 管理员 **JWT**（`auth_token` Cookie / Bearer，需 `isAdmin` 声明） | 前端管理后台 | `/api/v1/orders`、`/api/v1/payment/pay`、`/api/v1/payment/config/*`、`/api/v1/certs/*` |
 | `/api/v2/*` | 商户 **OAuth2 Bearer**（scope 校验） | 商户 / 第三方 S2S | `/api/v2/payment/pay`、`/api/v2/users`、`/api/v2/skillpay/*` |
 | `/oauth/*` | 公开（凭证换令牌） | 所有调用方 | `/oauth/token`、`/oauth/scopes`、`/oauth/revoke` |
 | 部分 `/api/v1`、`/api/v2` | 公开只读 | 任意 | `/api/v1/products`(GET)、`/api/v1/coin/charge-config`、`/api/v1/payment/channels` |
