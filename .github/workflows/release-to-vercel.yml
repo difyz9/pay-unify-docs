@@ -1,0 +1,42 @@
+name: Release to Vercel
+
+# 触发方式：推送 v* 标签（如 v1.0.0、v1.2.0-rc1）
+#   git tag v1.0.0 && git push origin v1.0.0
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Deploy ${{ github.ref_name }} → Vercel production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Vercel 云端构建参数由仓库根 vercel.json 决定：
+      #   installCommand=npm ci / buildCommand=npm run build /
+      #   outputDirectory=doc_build
+      - name: Deploy to Vercel (production)
+        id: deploy
+        uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./
+          github-comment: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print deployment URL
+        run: echo "✅ 发布完成 ${{ github.ref_name }}"
