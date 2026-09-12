@@ -4,13 +4,14 @@ title: 相关资源
 
 # 相关资源
 
-## 代码仓库
+## 代码仓库与在线站点
 
-| 仓库 | 地址 | 说明 |
+| 资源 | 地址 | 说明 |
 | --- | --- | --- |
-| pay-unify-backend | <https://gitee.com/difyz/pay-unify-backend> | 统一支付后端（Go / Gin） |
-| pay-unify-frontend | <https://gitee.com/difyz/pay-unify-frontend> | 支付管理后台（Next.js） |
-| 本文档站 | 位于父目录 `my_pay/docs/` | Rspress 构建的聚合文档 |
+| pay-unify（单仓） | <https://github.com/difyz9/pay-unify> | Go 后端（`backend/`）+ Next.js 控制台（`frontend/`）+ 部署（`deploy/`） |
+| 本文档站源码 | <https://github.com/difyz9/pay-unify-docs> | Rspress 聚合文档（发布到 Vercel） |
+| 在线文档 | <https://pay-unify-docs-one.vercel.app> | 本站生产地址 |
+| Docker 镜像 | <https://hub.docker.com/r/difyz9/pay-unify> | `difyz9/pay-unify:2.0.1`（多架构，≈57 MB） |
 
 ## 在线接口文档
 
@@ -18,38 +19,47 @@ title: 相关资源
 
 - Swagger UI：`http://<host>:<port>/swagger/index.html`
 - OpenAPI JSON：`http://<host>:<port>/swagger/doc.json`
-- 仓库内的离线定义：`pay-unify-backend/docs/swagger.yaml` / `swagger.json` / `docs.go`
+- 仓库内离线定义：`backend/docs/swagger.yaml` / `swagger.json` / `docs.go`
 
-## 仓库原生文档（本网站页面的同步来源）
+## 仓库内相关文档
 
-### pay-unify-backend/docs/
+单仓内随代码维护的资料：
 
-| 文件 | 对应本站页面 |
+| 文件 | 说明 |
 | --- | --- |
-| `AUTHENTICATION.md` | [认证体系](/backend/auth) |
-| `CONFIG_GUIDE.md` | [配置说明](/backend/config) |
-| `API_INTEGRATION_GUIDE.md` | [API 集成指南](/backend/api-integration) |
-| `UNIFIED_PAYMENT_API.md` | [统一支付接口](/backend/unified-payment) |
-| `PAYPAL_INTEGRATION.md` | [PayPal 集成](/backend/paypal) |
-| `X402_INTEGRATION_GUIDE.md` | [X402 / SkillPay](/backend/x402) |
-| `CERT_MANAGEMENT_GUIDE.md` | [证书管理](/backend/certs) |
-| `WORK_WECHAT_NOTIFICATION_GUIDE.md` | [企业微信通知](/backend/work-wechat) |
-| `CHANGELOG.md` | [更新日志](/changelog) |
+| `README.md` | 项目总说明（功能、Docker 一键运行、API、部署） |
+| `docs/dockerhub-overview.md` | Docker Hub 仓库 Overview 内容源（容器部署指南） |
+| `docs/1panel-packaging-plan.md` | 1Panel 应用包打包方案 |
+| `deploy/1panel/README.md` | 1Panel 本地应用安装说明 |
+| `backend/README.md` | 后端说明 |
+| `frontend/README.md` | 前端说明（含前后端接口对齐表） |
+| `frontend/code-review-report.md` | 前端代码审查报告 |
 
-### pay-unify-frontend/docs/
+### 本站页面的权威来源
 
-| 文件 | 对应本站页面 |
+`docs/backend/`、`docs/frontend/performance.md`、`docs/changelog.md` 等页面的内容
+**已并入本站直接维护**（原后端仓库 `backend/docs/*.md`、前端 `docs/*.md` 在重构为单仓时不再随仓库发布）。
+涉及实现细节时，以 [pay-unify 仓库](https://github.com/difyz9/pay-unify) 源码为准：
+
+| 本站页面 | 权威源码位置 |
 | --- | --- |
-| `deployment/VERCEL_DEPLOY_GUIDE.md`、`DOCKER_DEPLOYMENT_GUIDE.md` | [前端部署](/deployment/frontend) |
-| `FRONTEND_PERFORMANCE_GUIDE.md` | [前端性能指南](/frontend/performance) |
+| [认证体系](/backend/auth) | `backend/internal/middleware/`、`backend/internal/handler/login_handler.go`、`oauth_handler.go` |
+| [配置说明](/backend/config) | `backend/config.toml.example`、`backend/internal/core/env_config.go` |
+| [API 总览](/backend/api-overview) | `backend/internal/handler/*.go` 的 `RegisterRoutes`、`backend/docs/swagger.*` |
+| [统一支付接口](/backend/unified-payment) | `backend/internal/handler/payment_handler.go` |
+| [PayPal 集成](/backend/paypal) | `backend/internal/pkg/service/payment/paypal_service.go` |
+| [X402 / SkillPay](/backend/x402) | `backend/internal/pkg/service/payment/skillhub_service.go`、`skillpay_handler.go` |
+| [证书管理](/backend/certs) | `backend/internal/handler/payment_cert_handler.go`、`backend/internal/pkg/channel/spec.go` |
+| [企业微信通知](/backend/work-wechat) | `backend/internal/pkg/service/wecom_notification_service.go` |
+| [前端性能指南](/frontend/performance) | `frontend/` |
 
 ## 外部依赖
 
 - [Gin](https://github.com/gin-gonic/gin) · [GORM](https://gorm.io/) · [Uber FX](https://github.com/uber-go/fx) · [Zap](https://github.com/uber-go/zap)
 - [Next.js](https://nextjs.org/) · [Ant Design](https://ant.design/) · [Tailwind CSS](https://tailwindcss.com/) · [Recharts](https://recharts.org/)
-- 支付平台：支付宝开放平台 · 微信支付商户平台 · PayPal Developer · SkillHub
+- 支付平台：[支付宝开放平台](https://open.alipay.com/) · [微信支付商户平台](https://pay.weixin.qq.com/) · [PayPal Developer](https://developer.paypal.com/) · SkillHub
+- 交付：[Docker Hub](https://hub.docker.com/r/difyz9/pay-unify) · [1Panel](https://1panel.cn/)
 
 ## 许可
 
-- 后端仓库：Apache-2.0（swag 注解声明）/ MIT（README 徽标）——以仓库内 LICENSE 为准。
-- 前端仓库：见 `pay-unify-frontend` 内 LICENSE 说明。
+本项目使用 MIT License，详见仓库 `backend/LICENSE`（Copyright © 2025 difyz9）。

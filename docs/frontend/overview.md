@@ -2,9 +2,11 @@
 title: 前端概览
 ---
 
-# 前端概览（pay-unify-frontend）
+# 前端概览（`frontend/`）
 
-现代化的支付服务管理后台前端，基于 **Next.js 15（App Router）** 构建，覆盖支付 / 订单 / 金币 / 用户 / 商品 / 项目等多业务域的实时数据分析与控制台操作。
+现代化的支付服务管理控制台，基于 **Next.js 15（App Router）** 构建，覆盖支付 / 订单 / 金币 / 用户 / 商品 / 项目等多业务域的实时数据分析与控制台操作。
+
+在**单容器**部署形态下，控制台会被静态导出并由 Go 后端 `//go:embed all:web` 内嵌，与 API 同源。
 
 ## 技术栈
 
@@ -34,53 +36,55 @@ title: 前端概览
 | 支付设置 | `/dashboard/payment-settings` | **渠道配置 Tab**（参数编辑、开关热加载）+ **证书管理 Tab**（上传 / 设默认 / 下载 / 删除） | `payments`（`paymentService` / `certService` / `channelStatusService`） |
 | X402 收款案例 | `/dashboard/x402` | SkillPay 端到端演示：切换后端、L1 支付码逐行解析、轮询、幂等、退款、请求 / 响应原文记录 | `skillpay` |
 | API 应用管理 | `/dashboard/api-apps` | OAuth2 应用 CRUD：创建（生成 client_id / secret + scope）、轮换密钥、启停、删除 | `apiapps` |
+| 操作日志 | `/dashboard/audit` | 支付配置 / 证书操作审计 | `audit` |
 
 另有受保护页面：`/admin/*`（安全 / 许可证 / 事件等管理）、`/login`（登录）、`/env-test`（环境变量自检）。
 
-## 认证与会话（管理员 JWT）
+## 认证与会话
+
+控制台会话基于后端下发的 **HttpOnly Cookie**（`auth_token` + `csrf_token`），并做 **CSRF 双重提交**：
 
 ```
-登录 POST /api/v1/login  →  JWT 写入 Cookie auth_token
+登录 POST /api/v1/login
+  → 后端 Set-Cookie: auth_token（HttpOnly）+ csrf_token
         ↓
-Next.js middleware（src/middleware.ts）
-  - /dashboard、/admin 需要 auth_token（基本结构 + 过期校验），否则 302 → /login?redirect=...
+AuthGuard（src/components/auth/AuthGuard.tsx，客户端守卫）
+  - /dashboard、/admin 等受保护页面未登录 → router.push('/login')
         ↓
 apiClient（src/core/api/client.ts）请求拦截器
-  - 无显式 Authorization 时，自动把 Cookie auth_token 附加为 Bearer
-  - FormData 自动移除 JSON Content-Type（文件上传）
-  - 401 时走刷新队列 / 清理会话并跳登录
+  - 浏览器自动携带 auth_token Cookie（withCredentials）
+  - 非安全方法自动附加 X-CSRF-Token（取自 csrf_token Cookie）
+  - 401 时刷新队列（POST /api/v1/refresh），失败则清理会话跳登录
+  - 认证体系不依赖 Bearer，前端不持有任何接口密钥
 ```
 
 **要点**
 
-- 控制台**所有接口**（含支付下单演示、支付配置、证书管理）均使用管理员 JWT 会话，前端不持有商户密钥。
+- 控制台**所有接口**（含支付下单演示、支付配置、证书管理）均使用管理员 JWT 会话。
 - 商户 / 第三方调用 `POST /oauth/token` 走 OAuth2，与前端控制台无关（见「API 应用管理」）。
-- 401 处理：自动触发 `/api/v1/refresh` 刷新队列；失败则清除 Cookie 回登录页。
+- 401 处理：触发 `/api/v1/refresh` 刷新队列；失败则清理会话回登录页。
 
 ## API 地址解析（重要）
 
-`src/core/api/client.ts` 决定请求打到哪：
+`src/core/api/baseUrl.ts` 采用**同源优先**：
 
-```ts
-const isHttps = window.location.protocol === "https:";
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://124.222.202.16:8089";
-this.baseURL = isHttps ? "/api/proxy" : apiUrl;   // HTTPS 走 Next 代理，避免混合内容
-```
-
-| 场景 | baseURL | 说明 |
+| 部署形态 | baseURL | 说明 |
 | --- | --- | --- |
-| 本地 / HTTP | `NEXT_PUBLIC_API_URL`（如 `http://localhost:8097`） | 直接请求后端网关 |
-| HTTPS（Vercel / Nginx TLS） | `/api/proxy` | 经 `src/app/api/proxy` 服务端转发，规避 mixed-content |
+| 单容器同源（推荐 / 1Panel） | `""`（相对路径，即当前 origin） | 控制台与 API 同一个 origin，无 CORS、无混合内容 |
+| 前后端分离 | `NEXT_PUBLIC_API_URL`（如 `http://localhost:8097`） | 显式指向独立后端 origin |
+
+> 旧版按 HTTPS 切换 `/api/proxy` 代理的实现**已移除**（那是跨源时代的混合内容补丁）。
+> 由于 `NEXT_PUBLIC_*` 在构建期内联，单容器镜像刻意**不注入** `NEXT_PUBLIC_API_URL`，从而与域名 / 端口解耦。
 
 ### 环境变量
 
 | 变量 | 默认（示例） | 说明 |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | `http://124.222.202.16:8089` | 后端网关地址（HTTPS 部署时仅用于兜底 / 代理目标） |
+| `NEXT_PUBLIC_API_URL` | 空（同源） | 仅前后端分离部署时设置，指向独立后端 |
 | `NEXT_PUBLIC_X402_CLIENT_ID` | `local-test` | X402 演示页 OAuth2 client_id |
 | `NEXT_PUBLIC_X402_CLIENT_SECRET` | — | X402 演示页 OAuth2 client_secret |
 
-Next.js 按 `NODE_ENV` 自动加载对应 `.env.*`：`npm run dev` → `.env.development`，`npm run build:staging` → `.env.staging`，`npm run build:prod` / `build` → `.env.production` / `.env`。项目还提供 `.env.local`（git 忽略）覆盖开发本地后端。
+Next.js 按 `NODE_ENV` 自动加载对应 `.env.*`。项目提供 `.env.local`（git 忽略）覆盖本地后端。
 
 ## 目录结构与约定
 
@@ -89,38 +93,36 @@ src/
 ├── app/                 # App Router 页面
 │   ├── dashboard/       # 各业务仪表盘
 │   ├── admin/           # 安全 / 许可证等管理页
-│   ├── api/proxy/       # HTTPS 代理路由
 │   └── login/           # 登录页
-├── components/          # 可复用 UI（layout / ui / payments/certs 等）
-├── core/                # 跨领域能力：api（axios 封装）、auth（AuthContext/authService）、security
+├── components/          # 可复用 UI（layout / ui / auth/AuthGuard / payments/certs…）
+├── core/                # 跨领域能力：api（axios 封装 + baseUrl 解析）、auth（AuthContext/authService）
 ├── features/            # 按业务域划分：每个域含 services/ 与 types/
 │   ├── orders / payments / users / products / projects / coins
 │   ├── memberships / skillpay / apiapps / admin
 ├── constants/           # 订单状态码等共享常量（与后端数字码对齐）
-├── lib/                 # 通用工具（格式化、CSV 导出等）
-└── middleware.ts        # 路由级登录守卫
+└── lib/                 # 通用工具（格式化、CSV 导出等）
 ```
 
-- `core/`：HTTP 客户端（自动携带管理员 JWT、401 刷新队列、响应解包 `{code,message,data}`）、认证上下文。
+- `core/`：HTTP 客户端（HttpOnly Cookie + CSRF、401 刷新队列、响应解包 `{code,message,data}`）、认证上下文。
 - `features/*`：页面通过 `@/features/<域>` 访问 `services` 与 `types`，服务名与后端 handler 严格对齐（下表）。
-- `components/`：可跨业务复用的 UI。
+- `components/`：可跨业务复用的 UI；`AuthGuard` 负责客户端路由守卫。
 - CSV 导出（订单 / 用户 / 金币记录）为前端本地实现，后端暂无导出接口。
 
 ## 前端服务层 ↔ 后端接口对齐
 
 | 前端服务 | 后端接口 | 认证 |
 | --- | --- | --- |
-| `orderService` | `GET /api/v1/orders*`（列表/统计/趋势/详情/删除） | JWT |
+| `orderService` | `GET /api/v1/orders*`（列表/统计/趋势/详情/删除） | JWT（管理员） |
 | `orderService` | `POST /api/v1/payment/pay`、`GET query/:no`、`POST cancel/:no`、`POST close/:no`、`POST refund`（控制台演示） | JWT（管理员） |
 | `paymentService` | `GET/POST /api/v1/payment/config/*`、`PUT :provider/toggle` | JWT（管理员） |
 | `certService` | `POST /api/v1/certs/upload/file`、`POST /certs/list`、`POST :id/default`、`DELETE :id`、`GET :id/download` | JWT（管理员） |
 | `channelStatusService` | `GET /api/v1/payment/channels`（三渠道启用状态，公开） | 无需认证 |
-| `userService` | `GET/PUT /api/v1/users*`、`POST :id/vip`、`POST :id/coin`、`PUT :id/status` | JWT |
+| `userService` | `GET/PUT /api/v1/users*`、`POST :id/vip`、`POST :id/coin`、`PUT :id/status` | JWT（管理员） |
 | `productService` | `GET/POST/PUT/DELETE /api/v1/products*` | GET 公开 / 其余 JWT |
-| `projectService` | `/api/v1/projects*` | JWT |
+| `projectService` | `/api/v1/projects*` | JWT（管理员） |
 | `coinService` | `GET /api/v1/coins/*`、`GET /api/v1/coin/charge-config` | JWT / 公开 |
 | `membershipService` | 复用 `users` 接口（VIP 会员即 `is_vip=true`） | JWT |
-| `apiAppService` | `/api/v2/api-apps*`（CRUD / 轮换密钥 / 启停 / 删除） | OAuth2（`apiapp:manage`） |
+| `apiAppService` | `/api/v1/api-apps*`（控制台，管理员 JWT）；外部应用可走 `/api/v2/api-apps*`（`apiapp:manage`） | JWT / OAuth2 |
 | `skillpayService` | `POST /oauth/token`、`/api/v2/skillpay/*`（X402） | OAuth2 |
 
 ## 常见脚本
@@ -136,5 +138,5 @@ src/
 ## 更多
 
 - 前端部署与运维细节 → [前端部署](/deployment/frontend)
-- 前端性能与优化指南 → [前端性能指南](/frontend/performance)（由仓库 `docs/FRONTEND_PERFORMANCE_GUIDE.md` 同步）
-- 官方前端文档位于 `pay-unify-frontend/docs/`（deployment / guides / fixes / status / notes）。
+- 前端性能与优化指南 → [前端性能指南](/frontend/performance)
+- 控制台内联接口说明 → [相关资源](/appendix/resources)（页面 ↔ 源码对照）

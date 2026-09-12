@@ -4,14 +4,14 @@ pageType: home
 hero:
   name: Pay-Unify
   text: 统一支付文档中心
-  tagline: 后端 Go (Gin) + 前端 Next.js —— 支付宝 / 微信支付 / PayPal / SkillHub X402 的一栈接入与运维文档
+  tagline: Go (Gin) 后端 + Next.js 控制台单仓 / 单容器 —— 支付宝 / 微信支付 / PayPal / SkillHub X402 的一栈接入与运维文档
   actions:
     - theme: brand
       text: 🚀 快速开始
       link: /guide/quickstart
     - theme: alt
-      text: 系统概览
-      link: /guide/overview
+      text: 🐳 Docker 一键部署
+      link: /deployment/docker
 
 features:
   - title: 🔐 双轨认证
@@ -24,6 +24,8 @@ features:
     details: 订单、用户 / VIP、商品、项目、金币 五大业务域 + 实时数据可视化管理后台。
   - title: 🔑 证书托管
     details: 支付宝 / 微信证书 Web 上传、设默认、热更新，自动落盘 runtime/certs，回退兼容 config.toml 老部署。
+  - title: 🐳 单容器交付
+    details: 前端静态导出并由 Go 二进制内嵌，单镜像 / 单容器 / 单端口（≈57 MB，多架构），无需 Nginx 与 Node 运行时。
   - title: 🚢 多形态部署
-    details: Docker / Docker Compose / Supervisor / Vercel / Nginx 反向代理，前端 standalone 输出开箱即用。
+    details: Docker Compose / docker run / 1Panel 应用商店 / Supervisor / Vercel / Nginx，前端另可 standalone 独立部署。
 ---

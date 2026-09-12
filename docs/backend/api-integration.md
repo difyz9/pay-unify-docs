@@ -1,5 +1,5 @@
-> **本文档来源**：pay-unify-backend 仓库的 `docs/API_INTEGRATION_GUIDE.md`（保持与源码同步的权威版本）。
-> 修改时请先更新仓库内原文件，再同步本页。
+> **维护说明**：本文档已并入本站直接维护（单仓重构后原 `backend/docs/*.md`、前端 `docs/*.md` 不再随仓库发布）。
+> 实现细节以 [pay-unify 源码](https://github.com/difyz9/pay-unify) 为准，页面与源码的对应关系见[相关资源](/appendix/resources)。
 
 # 支付统一平台 API 集成指南
 
@@ -22,7 +22,7 @@
 
 ### 1.1 接口基础信息
 
-- **API Base URL**: `https://api.vtranslink.com/api/v2`
+- **API Base URL**: `https://api.example.com/api/v2`
 - **协议**: HTTPS
 - **数据格式**: JSON
 - **字符编码**: UTF-8
@@ -38,125 +38,79 @@
 
 ### 1.3 订单状态
 
-| 状态码 | 常量名 | 说明 |
-|-------|--------|------|
-| 1 | OrderNotPaid | 未支付 |
-| 2 | OrderPaidSuccess | 支付成功 |
-| 201 | OrderClosed | 已关闭 |
-| 202 | OrderRefunded | 已退款 |
+| 状态码 | 说明 |
+|-------|------|
+| 1 | 待支付 |
+| 2 | 已扫码（未支付） |
+| 101 | 支付失败 |
+| 201 | 已支付 |
+| 300 | 已关闭 |
+| 400 | 已退款 |
+
+> 前端映射常量见 `frontend/src/constants/options.ts`。
 
 ---
 
 ## 2. 认证机制
 
-### 2.1 认证参数
-
-所有需要认证的接口必须在 HTTP Header 中携带以下参数：
-
-| Header 名称 | 必填 | 说明 | 示例 |
-|------------|------|------|------|
-| X-App-Id | 是 | 应用ID | `test-app-001` |
-| X-Timestamp | 是 | Unix时间戳（秒） | `1704009600` |
-| X-Nonce | 是 | 随机字符串（6-32位） | `abc123xyz` |
-| X-Sign | 视配置 | 请求签名 | `d8f7a6b5c4e3d2a1...` |
-
-### 2.2 签名算法
-
-#### 步骤1: 构造待签名字符串
+Pay-Unify 开放 API（`/api/v2/*`）使用 **OAuth2 Client Credentials**：
 
 ```
-AppId={AppId}&Nonce={Nonce}&Timestamp={Timestamp}
+① POST /oauth/token    → 用 client_id / client_secret 换 access_token（默认 1 小时）
+② 调用 /api/v2/*       → Authorization: Bearer <access_token>
+③ POST /oauth/revoke   → 需要时吊销令牌
 ```
 
-如果 `SignIncludeBody=true`，则需要加上请求体：
+### 2.1 换取令牌
+
+**接口**：`POST /oauth/token`（公开；同时接受 JSON 与 `application/x-www-form-urlencoded`）
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| grant_type | string | 是 | 固定 `client_credentials` |
+| client_id | string | 是 | 控制台「API 应用管理」创建的应用 ID |
+| client_secret | string | 是 | 应用密钥（仅创建 / 轮换时展示一次，bcrypt 存储） |
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8097/oauth/token \
+  -H "Content-Type: application/json" \
+  -d '{"grant_type":"client_credentials","client_id":"your-client-id","client_secret":"your-secret"}' \
+  | jq -r .access_token)
 ```
-AppId={AppId}&Nonce={Nonce}&Timestamp={Timestamp}&Body={RequestBody}
-```
 
-#### 步骤2: 计算签名
+响应：
 
-使用 HMAC-SHA256 算法，密钥为 `AppSecret`：
-
-```
-Signature = HMAC-SHA256(待签名字符串, AppSecret)
-```
-
-然后转换为十六进制小写字符串。
-
-### 2.3 签名示例（Go语言）
-
-```go
-package main
-
-import (
-    "crypto/hmac"
-    "crypto/sha256"
-    "encoding/hex"
-    "fmt"
-    "time"
-)
-
-func generateSignature(appId, appSecret, nonce string, timestamp int64, body string, includeBody bool) string {
-    // 构造待签名字符串
-    signStr := fmt.Sprintf("AppId=%s&Nonce=%s&Timestamp=%d", appId, nonce, timestamp)
-    
-    if includeBody && body != "" {
-        signStr += fmt.Sprintf("&Body=%s", body)
-    }
-    
-    // 计算 HMAC-SHA256
-    h := hmac.New(sha256.New, []byte(appSecret))
-    h.Write([]byte(signStr))
-    
-    // 转换为十六进制小写字符串
-    return hex.EncodeToString(h.Sum(nil))
-}
-
-func main() {
-    appId := "test-app-001"
-    appSecret := "test-secret-key-12345678901234567890"
-    nonce := "abc123xyz"
-    timestamp := time.Now().Unix()
-    body := `{"subject":"测试商品","amount":0.01,"payWay":"alipay"}`
-    
-    signature := generateSignature(appId, appSecret, nonce, timestamp, body, false)
-    fmt.Printf("Signature: %s\n", signature)
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "payment:write order:read"
 }
 ```
 
-### 2.4 签名示例（Python）
+### 2.2 调用接口
 
-```python
-import hmac
-import hashlib
-import time
+所有 `/api/v2/*` 请求携带：
 
-def generate_signature(app_id, app_secret, nonce, timestamp, body="", include_body=False):
-    # 构造待签名字符串
-    sign_str = f"AppId={app_id}&Nonce={nonce}&Timestamp={timestamp}"
-    
-    if include_body and body:
-        sign_str += f"&Body={body}"
-    
-    # 计算 HMAC-SHA256
-    signature = hmac.new(
-        app_secret.encode('utf-8'),
-        sign_str.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    
-    return signature
-
-# 示例
-app_id = "test-app-001"
-app_secret = "test-secret-key-12345678901234567890"
-nonce = "abc123xyz"
-timestamp = int(time.time())
-body = '{"subject":"测试商品","amount":0.01,"payWay":"alipay"}'
-
-signature = generate_signature(app_id, app_secret, nonce, timestamp, body, False)
-print(f"Signature: {signature}")
 ```
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+令牌按应用的 scope 授权（`payment:write` 下单、`payment:read` 查单等），`admin` scope 通过所有检查。
+scope 全集见 [API 总览](/backend/api-overview)。
+
+### 2.3 错误处理
+
+`POST /oauth/token` 失败返回 `invalid_client`（RFC 6749 不区分“应用不存在”与“密钥错误”）：
+
+- 新部署的库里没有 API 应用 → 先登录控制台「API 应用管理」（走 `/api/v1/api-apps` 管理员会话）创建一个；
+- 应用被禁用、密钥被轮换、或 scope 不含所需权限 → 同样会报 `invalid_client` / `403`。
+
+> ⚠️ 旧版 GoAuth HMAC（`X-App-Id / X-Timestamp / X-Nonce / X-Sign`）认证已**全面下线**，
+> 若在历史资料中看到这些请求头，请忽略并改用 Bearer。管理员 JWT（`/api/v1/*`，HttpOnly Cookie + CSRF）
+> 仅用于控制台，详见 [认证体系](/backend/auth)。
 
 ---
 
@@ -205,12 +159,9 @@ print(f"Signature: {signature}")
 #### 支付宝支付
 
 ```bash
-curl -X POST "https://api.vtranslink.com/api/v2/payment/pay" \
+curl -X POST "https://api.example.com/api/v2/payment/pay" \
   -H "Content-Type: application/json" \
-  -H "X-App-Id: test-app-001" \
-  -H "X-Timestamp: 1704009600" \
-  -H "X-Nonce: abc123xyz" \
-  -H "X-Sign: d8f7a6b5c4e3d2a1..." \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "subject": "VIP会员30天",
     "amount": 1.00,
@@ -223,12 +174,9 @@ curl -X POST "https://api.vtranslink.com/api/v2/payment/pay" \
 #### 微信支付
 
 ```bash
-curl -X POST "https://api.vtranslink.com/api/v2/payment/pay" \
+curl -X POST "https://api.example.com/api/v2/payment/pay" \
   -H "Content-Type: application/json" \
-  -H "X-App-Id: test-app-001" \
-  -H "X-Timestamp: 1704009600" \
-  -H "X-Nonce: abc123xyz" \
-  -H "X-Sign: d8f7a6b5c4e3d2a1..." \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "subject": "VIP会员30天",
     "amount": 99.00,
@@ -241,12 +189,9 @@ curl -X POST "https://api.vtranslink.com/api/v2/payment/pay" \
 #### PayPal支付
 
 ```bash
-curl -X POST "https://api.vtranslink.com/api/v2/payment/pay" \
+curl -X POST "https://api.example.com/api/v2/payment/pay" \
   -H "Content-Type: application/json" \
-  -H "X-App-Id: test-app-001" \
-  -H "X-Timestamp: 1704009600" \
-  -H "X-Nonce: abc123xyz" \
-  -H "X-Sign: d8f7a6b5c4e3d2a1..." \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "subject": "VIP Membership 30 Days",
     "amount": 9.99,
@@ -336,7 +281,7 @@ curl -X POST "https://api.vtranslink.com/api/v2/payment/pay" \
 ### 4.4 请求示例
 
 ```bash
-curl -X GET "https://api.vtranslink.com/api/v2/payment/query/202512311234567890"
+curl -X GET "https://api.example.com/api/v2/payment/query/202512311234567890"
 ```
 
 ### 4.5 响应示例
@@ -413,11 +358,8 @@ curl -X GET "https://api.vtranslink.com/api/v2/payment/query/202512311234567890"
 ### 5.4 请求示例
 
 ```bash
-curl -X GET "https://api.vtranslink.com/api/v2/payment/orders?userId=user_123456&page=1&pageSize=20" \
-  -H "X-App-Id: test-app-001" \
-  -H "X-Timestamp: 1704009600" \
-  -H "X-Nonce: abc123xyz" \
-  -H "X-Sign: d8f7a6b5c4e3d2a1..."
+curl -X GET "https://api.example.com/api/v2/payment/orders?userId=user_123456&page=1&pageSize=20" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 5.5 响应示例
@@ -465,11 +407,8 @@ curl -X GET "https://api.vtranslink.com/api/v2/payment/orders?userId=user_123456
 ### 6.3 请求示例
 
 ```bash
-curl -X POST "https://api.vtranslink.com/api/v2/payment/close/202512311234567890" \
-  -H "X-App-Id: test-app-001" \
-  -H "X-Timestamp: 1704009600" \
-  -H "X-Nonce: abc123xyz" \
-  -H "X-Sign: d8f7a6b5c4e3d2a1..."
+curl -X POST "https://api.example.com/api/v2/payment/close/202512311234567890" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 6.4 响应示例
@@ -506,12 +445,9 @@ curl -X POST "https://api.vtranslink.com/api/v2/payment/close/202512311234567890
 ### 7.3 请求示例
 
 ```bash
-curl -X POST "https://api.vtranslink.com/api/v2/payment/cancel/202512311234567890" \
+curl -X POST "https://api.example.com/api/v2/payment/cancel/202512311234567890" \
   -H "Content-Type: application/json" \
-  -H "X-App-Id: test-app-001" \
-  -H "X-Timestamp: 1704009600" \
-  -H "X-Nonce: abc123xyz" \
-  -H "X-Sign: d8f7a6b5c4e3d2a1..." \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "cancelReason": "用户不想要了"
   }'
@@ -553,12 +489,9 @@ curl -X POST "https://api.vtranslink.com/api/v2/payment/cancel/20251231123456789
 ### 8.3 请求示例
 
 ```bash
-curl -X POST "https://api.vtranslink.com/api/v2/payment/refund" \
+curl -X POST "https://api.example.com/api/v2/payment/refund" \
   -H "Content-Type: application/json" \
-  -H "X-App-Id: test-app-001" \
-  -H "X-Timestamp: 1704009600" \
-  -H "X-Nonce: abc123xyz" \
-  -H "X-Sign: d8f7a6b5c4e3d2a1..." \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "outTradeNo": "202512311234567890",
     "refundAmount": 99.00,
@@ -695,18 +628,17 @@ const timer = setInterval(async () => {
 
 ---
 
-## 11. SDK示例
+## 11. SDK 示例
 
-### 11.1 Go SDK 示例
+官方未提供 SDK 包，以下为最小 OAuth2 接入示例（以 Go / Python / Node.js 演示）。
+
+### 11.1 Go
 
 ```go
 package main
 
 import (
     "bytes"
-    "crypto/hmac"
-    "crypto/sha256"
-    "encoding/hex"
     "encoding/json"
     "fmt"
     "io"
@@ -714,268 +646,153 @@ import (
     "time"
 )
 
-type PaymentClient struct {
-    BaseURL   string
-    AppId     string
-    AppSecret string
+type Client struct {
+    BaseURL      string
+    ClientID     string
+    ClientSecret string
+    Token        string
 }
 
-func NewPaymentClient(baseURL, appId, appSecret string) *PaymentClient {
-    return &PaymentClient{
-        BaseURL:   baseURL,
-        AppId:     appId,
-        AppSecret: appSecret,
+// 1) 换取 access_token
+func (c *Client) FetchToken() error {
+    body, _ := json.Marshal(map[string]string{
+        "grant_type":    "client_credentials",
+        "client_id":     c.ClientID,
+        "client_secret": c.ClientSecret,
+    })
+    resp, err := http.Post(c.BaseURL+"/oauth/token", "application/json", bytes.NewReader(body))
+    if err != nil {
+        return err
     }
-}
-
-// 生成签名
-func (c *PaymentClient) generateSign(nonce string, timestamp int64) string {
-    signStr := fmt.Sprintf("AppId=%s&Nonce=%s&Timestamp=%d", c.AppId, nonce, timestamp)
-    h := hmac.New(sha256.New, []byte(c.AppSecret))
-    h.Write([]byte(signStr))
-    return hex.EncodeToString(h.Sum(nil))
-}
-
-// 创建支付订单
-func (c *PaymentClient) CreatePayment(subject string, amount float64, payWay string) (map[string]interface{}, error) {
-    url := fmt.Sprintf("%s/api/v2/payment/pay", c.BaseURL)
-    
-    // 构造请求体
-    reqBody := map[string]interface{}{
-        "subject": subject,
-        "amount":  amount,
-        "payWay":  payWay,
+    defer resp.Body.Close()
+    var r struct {
+        AccessToken string `json:"access_token"`
     }
-    jsonData, _ := json.Marshal(reqBody)
-    
-    // 生成认证参数
-    nonce := fmt.Sprintf("%d", time.Now().UnixNano())
-    timestamp := time.Now().Unix()
-    sign := c.generateSign(nonce, timestamp)
-    
-    // 创建请求
-    req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+    if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+        return err
+    }
+    c.Token = r.AccessToken
+    return nil
+}
+
+// 2) 下单
+func (c *Client) CreatePayment(subject string, amount float64, payWay string) (map[string]any, error) {
+    payload, _ := json.Marshal(map[string]any{
+        "subject": subject, "amount": amount, "payWay": payWay,
+    })
+    req, _ := http.NewRequest("POST", c.BaseURL+"/api/v2/payment/pay", bytes.NewReader(payload))
     req.Header.Set("Content-Type", "application/json")
-    req.Header.Set("X-App-Id", c.AppId)
-    req.Header.Set("X-Timestamp", fmt.Sprintf("%d", timestamp))
-    req.Header.Set("X-Nonce", nonce)
-    req.Header.Set("X-Sign", sign)
-    
-    // 发送请求
-    client := &http.Client{Timeout: 30 * time.Second}
-    resp, err := client.Do(req)
+    req.Header.Set("Authorization", "Bearer "+c.Token)
+
+    resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
     if err != nil {
         return nil, err
     }
     defer resp.Body.Close()
-    
-    // 解析响应
-    body, _ := io.ReadAll(resp.Body)
-    var result map[string]interface{}
-    json.Unmarshal(body, &result)
-    
-    return result, nil
+    data, _ := io.ReadAll(resp.Body)
+    var out map[string]any
+    json.Unmarshal(data, &out)
+    return out, nil
 }
 
-// 查询订单状态
-func (c *PaymentClient) QueryOrder(orderNo string) (map[string]interface{}, error) {
-    url := fmt.Sprintf("%s/api/v2/payment/query/%s", c.BaseURL, orderNo)
-    
-    resp, err := http.Get(url)
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Body.Close()
-    
-    body, _ := io.ReadAll(resp.Body)
-    var result map[string]interface{}
-    json.Unmarshal(body, &result)
-    
-    return result, nil
-}
-
-// 使用示例
 func main() {
-    client := NewPaymentClient(
-        "https://api.vtranslink.com",
-        "test-app-001",
-        "test-secret-key-12345678901234567890",
-    )
-    
-    // 创建支付订单
-    result, err := client.CreatePayment("VIP会员30天", 99.00, "alipay")
-    if err != nil {
-        fmt.Printf("创建订单失败: %v\n", err)
-        return
+    c := &Client{BaseURL: "http://localhost:8097", ClientID: "your-client-id", ClientSecret: "your-secret"}
+    if err := c.FetchToken(); err != nil {
+        panic(err)
     }
-    
-    fmt.Printf("支付链接: %v\n", result["data"].(map[string]interface{})["payUrl"])
-    orderNo := result["data"].(map[string]interface{})["orderNo"].(string)
-    
-    // 查询订单状态
-    time.Sleep(2 * time.Second)
-    orderStatus, _ := client.QueryOrder(orderNo)
-    fmt.Printf("订单状态: %v\n", orderStatus)
+    res, _ := c.CreatePayment("VIP会员30天", 1.00, "alipay")
+    fmt.Printf("%v\n", res)
 }
 ```
 
-### 11.2 Python SDK 示例
+### 11.2 Python
 
 ```python
-import hmac
-import hashlib
-import time
-import json
 import requests
 
 class PaymentClient:
-    def __init__(self, base_url, app_id, app_secret):
-        self.base_url = base_url
-        self.app_id = app_id
-        self.app_secret = app_secret
-    
-    def _generate_sign(self, nonce, timestamp):
-        """生成签名"""
-        sign_str = f"AppId={self.app_id}&Nonce={nonce}&Timestamp={timestamp}"
-        signature = hmac.new(
-            self.app_secret.encode('utf-8'),
-            sign_str.encode('utf-8'),
-            hashlib.sha256
-        ).hexdigest()
-        return signature
-    
-    def create_payment(self, subject, amount, pay_way):
-        """创建支付订单"""
-        url = f"{self.base_url}/api/v2/payment/pay"
-        
-        # 生成认证参数
-        nonce = str(int(time.time() * 1000000))
-        timestamp = int(time.time())
-        sign = self._generate_sign(nonce, timestamp)
-        
-        # 构造请求
-        headers = {
-            "Content-Type": "application/json",
-            "X-App-Id": self.app_id,
-            "X-Timestamp": str(timestamp),
-            "X-Nonce": nonce,
-            "X-Sign": sign
-        }
-        
-        data = {
-            "subject": subject,
-            "amount": amount,
-            "payWay": pay_way
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        return response.json()
-    
-    def query_order(self, order_no):
-        """查询订单状态"""
-        url = f"{self.base_url}/api/v2/payment/query/{order_no}"
-        response = requests.get(url, timeout=30)
-        return response.json()
+    def __init__(self, base_url, client_id, client_secret):
+        self.base_url = base_url.rstrip("/")
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.token = None
 
-# 使用示例
+    def fetch_token(self):
+        r = requests.post(f"{self.base_url}/oauth/token", json={
+            "grant_type": "client_credentials",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        }, timeout=30)
+        r.raise_for_status()
+        self.token = r.json()["access_token"]
+
+    @property
+    def headers(self):
+        return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+
+    def create_payment(self, subject, amount, pay_way):
+        r = requests.post(f"{self.base_url}/api/v2/payment/pay",
+                          headers=self.headers,
+                          json={"subject": subject, "amount": amount, "payWay": pay_way},
+                          timeout=30)
+        return r.json()
+
+    def query_order(self, order_no):
+        r = requests.get(f"{self.base_url}/api/v2/payment/query/{order_no}",
+                         headers=self.headers, timeout=30)
+        return r.json()
+
 if __name__ == "__main__":
-    client = PaymentClient(
-        base_url="https://api.vtranslink.com",
-        app_id="test-app-001",
-        app_secret="test-secret-key-12345678901234567890"
-    )
-    
-    # 创建支付订单
-    result = client.create_payment("VIP会员30天", 99.00, "alipay")
-    print(f"支付链接: {result['data']['payUrl']}")
-    order_no = result['data']['orderNo']
-    
-    # 等待2秒后查询订单状态
-    time.sleep(2)
-    order_status = client.query_order(order_no)
-    print(f"订单状态: {order_status}")
+    c = PaymentClient("http://localhost:8097", "your-client-id", "your-secret")
+    c.fetch_token()
+    print(c.create_payment("VIP会员30天", 1.00, "alipay"))
 ```
 
-### 11.3 JavaScript/Node.js SDK 示例
+### 11.3 JavaScript / Node.js
 
 ```javascript
-const crypto = require('crypto');
-const axios = require('axios');
+import axios from 'axios';
 
 class PaymentClient {
-  constructor(baseURL, appId, appSecret) {
-    this.baseURL = baseURL;
-    this.appId = appId;
-    this.appSecret = appSecret;
+  constructor(baseURL, clientId, clientSecret) {
+    this.baseURL = baseURL.replace(/\/$/, '');
+    this.clientId = clientId;
+    this.clientSecret = clientSecret;
+    this.token = null;
   }
 
-  // 生成签名
-  generateSign(nonce, timestamp) {
-    const signStr = `AppId=${this.appId}&Nonce=${nonce}&Timestamp=${timestamp}`;
-    const hmac = crypto.createHmac('sha256', this.appSecret);
-    hmac.update(signStr);
-    return hmac.digest('hex');
+  async fetchToken() {
+    const { data } = await axios.post(`${this.baseURL}/oauth/token`, {
+      grant_type: 'client_credentials',
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+    }, { timeout: 30000 });
+    this.token = data.access_token;
   }
 
-  // 创建支付订单
+  get headers() {
+    return { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' };
+  }
+
   async createPayment(subject, amount, payWay) {
-    const url = `${this.baseURL}/api/v2/payment/pay`;
-    
-    // 生成认证参数
-    const nonce = Date.now().toString();
-    const timestamp = Math.floor(Date.now() / 1000);
-    const sign = this.generateSign(nonce, timestamp);
-    
-    // 发送请求
-    const response = await axios.post(url, {
-      subject,
-      amount,
-      payWay
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-App-Id': this.appId,
-        'X-Timestamp': timestamp.toString(),
-        'X-Nonce': nonce,
-        'X-Sign': sign
-      },
-      timeout: 30000
-    });
-    
-    return response.data;
+    const { data } = await axios.post(`${this.baseURL}/api/v2/payment/pay`,
+      { subject, amount, payWay }, { headers: this.headers, timeout: 30000 });
+    return data;
   }
 
-  // 查询订单状态
   async queryOrder(orderNo) {
-    const url = `${this.baseURL}/api/v2/payment/query/${orderNo}`;
-    const response = await axios.get(url, { timeout: 30000 });
-    return response.data;
+    const { data } = await axios.get(`${this.baseURL}/api/v2/payment/query/${orderNo}`,
+      { headers: this.headers, timeout: 30000 });
+    return data;
   }
 }
 
-// 使用示例
-(async () => {
-  const client = new PaymentClient(
-    'https://api.vtranslink.com',
-    'test-app-001',
-    'test-secret-key-12345678901234567890'
-  );
-  
-  try {
-    // 创建支付订单
-    const result = await client.createPayment('VIP会员30天', 99.00, 'alipay');
-    console.log('支付链接:', result.data.payUrl);
-    const orderNo = result.data.orderNo;
-    
-    // 等待2秒后查询订单状态
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    const orderStatus = await client.queryOrder(orderNo);
-    console.log('订单状态:', orderStatus);
-  } catch (error) {
-    console.error('错误:', error.message);
-  }
-})();
+const c = new PaymentClient('http://localhost:8097', 'your-client-id', 'your-secret');
+await c.fetchToken();
+console.log(await c.createPayment('VIP会员30天', 1.00, 'alipay'));
 ```
+
+> 生产环境务必使用 HTTPS；令牌默认 1 小时过期，请实现自动刷新。
 
 ---
 

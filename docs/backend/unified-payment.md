@@ -1,9 +1,10 @@
-> **本文档来源**：pay-unify-backend 仓库的 `docs/UNIFIED_PAYMENT_API.md`（保持与源码同步的权威版本）。
-> 修改时请先更新仓库内原文件，再同步本页。
+> **维护说明**：本文档已并入本站直接维护（单仓重构后原 `backend/docs/*.md`、前端 `docs/*.md` 不再随仓库发布）。
+> 实现细节以 [pay-unify 源码](https://github.com/difyz9/pay-unify) 为准，页面与源码的对应关系见[相关资源](/appendix/resources)。
 
 # 统一支付接口说明
 
-> ⚠️ 认证已迁移为 OAuth2（/api/v2/* 用 Bearer token），本文若出现 GoAuth/X-Sign 示例均视为过期写法。
+> ⚠️ 认证已迁移为 OAuth2：`/api/v2/*` 用 Bearer token（`POST /oauth/token` 换取），
+> `/api/v1/*` 用管理员 JWT。本文中的 GoAuth/X-Sign 示例均为旧写法，已替换。
 
 ## 功能概述
 
@@ -37,10 +38,7 @@ POST /api/v2/payment/close/{outTradeNo}
 
 **请求头：**
 ```
-X-App-Id: 应用ID
-X-Timestamp: 时间戳
-X-Nonce: 随机字符串
-X-Sign: 签名
+Authorization: Bearer <access_token>
 ```
 
 **响应示例：**
@@ -83,10 +81,7 @@ POST /api/v2/payment/refund
 
 **请求头：**
 ```
-X-App-Id: 应用ID
-X-Timestamp: 时间戳
-X-Nonce: 随机字符串
-X-Sign: 签名
+Authorization: Bearer <access_token>
 ```
 
 **响应示例：**
@@ -108,25 +103,12 @@ X-Sign: 签名
 
 ---
 
-## 旧接口（向后兼容）
+## 旧专用接口（已下线）
 
-以下接口仍然可用，保持向后兼容：
+早期版本提供的支付宝 / 微信专用接口（`payment/alipay/*`、`payment/wechat/*`）
+**已在当前实现中注释下线**，路由不再注册。请统一使用上面的 `payment/close`、`payment/refund` 接口。
 
-### 支付宝专用接口
-
-```
-POST /api/v1/payment/alipay/close/{outTradeNo}  # 关闭订单
-POST /api/v1/payment/alipay/refund              # 申请退款
-```
-
-### 微信专用接口
-
-```
-POST /api/v1/payment/wechat/close/{outTradeNo}  # 关闭订单
-POST /api/v1/payment/wechat/refund              # 申请退款
-```
-
-**注意：** 建议新项目使用统一接口，旧接口仅用于向后兼容。
+> 源码位置：`backend/internal/handler/payment_handler.go`（专用路由已被注释）。
 
 ---
 
@@ -212,31 +194,28 @@ case "wechat":
 ### 统一关闭订单
 
 ```bash
+# 先换 Bearer token
+TOKEN=$(curl -s -X POST http://localhost:8097/oauth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"grant_type":"client_credentials","client_id":"your-client-id","client_secret":"your-secret"}' \
+  | jq -r .access_token)
+
 # 关闭支付宝订单
-curl -X POST 'http://localhost:8080/api/v2/payment/close/202501091234567890' \
-  -H 'X-App-Id: your-app-id' \
-  -H 'X-Timestamp: 1735632000' \
-  -H 'X-Nonce: random-nonce' \
-  -H 'X-Sign: your-signature'
+curl -X POST 'http://localhost:8097/api/v2/payment/close/202501091234567890' \
+  -H "Authorization: Bearer $TOKEN"
 
 # 关闭微信订单（相同接口）
-curl -X POST 'http://localhost:8080/api/v2/payment/close/202501099876543210' \
-  -H 'X-App-Id: your-app-id' \
-  -H 'X-Timestamp: 1735632000' \
-  -H 'X-Nonce: random-nonce' \
-  -H 'X-Sign: your-signature'
+curl -X POST 'http://localhost:8097/api/v2/payment/close/202501099876543210' \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### 统一申请退款
 
 ```bash
 # 支付宝退款
-curl -X POST 'http://localhost:8080/api/v2/payment/refund' \
+curl -X POST 'http://localhost:8097/api/v2/payment/refund' \
   -H 'Content-Type: application/json' \
-  -H 'X-App-Id: your-app-id' \
-  -H 'X-Timestamp: 1735632000' \
-  -H 'X-Nonce: random-nonce' \
-  -H 'X-Sign: your-signature' \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "outTradeNo": "202501091234567890",
     "refundAmount": 0.01,
@@ -244,12 +223,9 @@ curl -X POST 'http://localhost:8080/api/v2/payment/refund' \
   }'
 
 # 微信退款（相同接口，相同参数格式）
-curl -X POST 'http://localhost:8080/api/v2/payment/refund' \
+curl -X POST 'http://localhost:8097/api/v2/payment/refund' \
   -H 'Content-Type: application/json' \
-  -H 'X-App-Id: your-app-id' \
-  -H 'X-Timestamp: 1735632000' \
-  -H 'X-Nonce: random-nonce' \
-  -H 'X-Sign: your-signature' \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "outTradeNo": "202501099876543210",
     "refundAmount": 1.00,
@@ -261,12 +237,12 @@ curl -X POST 'http://localhost:8080/api/v2/payment/refund' \
 
 ## 接口对比
 
-| 功能 | 旧接口 | 新接口 | 说明 |
+| 功能 | 旧专用接口（已下线） | 统一接口 | 说明 |
 |------|--------|--------|------|
-| 关闭支付宝订单 | `/payment/alipay/close/:id` | `/payment/close/:id` | 统一接口 |
-| 关闭微信订单 | `/payment/wechat/close/:id` | `/payment/close/:id` | 统一接口 |
-| 支付宝退款 | `/payment/alipay/refund` | `/payment/refund` | 统一接口 |
-| 微信退款 | `/payment/wechat/refund` | `/payment/refund` | 统一接口 |
+| 关闭支付宝订单 | `payment/alipay/close/:id` | `payment/close/:id` | 统一接口 |
+| 关闭微信订单 | `payment/wechat/close/:id` | `payment/close/:id` | 统一接口 |
+| 支付宝退款 | `payment/alipay/refund` | `payment/refund` | 统一接口 |
+| 微信退款 | `payment/wechat/refund` | `payment/refund` | 统一接口 |
 
 ---
 
@@ -310,7 +286,7 @@ case "paypal":
 - 返回支付方式信息便于调试
 
 ### 4. 权限验证
-- 所有接口均需 OAuth2 Bearer 认证（POST /oauth/token 换取；本文若含 X-App-Id/X-Sign 示例请忽略）
+- 所有接口均需 OAuth2 Bearer 认证（`POST /oauth/token` 换取，见[认证体系](/backend/auth)）
 - 自动验证订单归属权
 - 只能操作本应用的订单
 
@@ -318,16 +294,17 @@ case "paypal":
 
 ## API文档
 
-访问 Swagger 文档查看完整API定义：
-- 开发环境：`http://localhost:8080/swagger/index.html`
+访问 Swagger 文档查看完整 API 定义：
+- 开发环境：`http://localhost:8097/swagger/index.html`
 - 搜索关键词：`payment/close` 或 `payment/refund`
 
 ---
 
 ## 相关文件
 
+均在 `backend/` 下：
+
 - `internal/handler/payment_handler.go` - 统一接口实现
-- `internal/handler/wechat_handler.go` - 微信专用接口（兼容）
 - `internal/pkg/service/payment/alipay_service.go` - 支付宝服务
 - `internal/pkg/service/payment/wepay_service.go` - 微信服务
 

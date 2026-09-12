@@ -1,23 +1,27 @@
 # PayHub Docs · Pay-Unify 统一支付文档中心
 
-基于 [Rspress](https://rspress.dev) 构建的 **Pay-Unify 统一支付平台**聚合文档站，
-覆盖 `pay-unify-backend`（Go 后端）与 `pay-unify-frontend`（Next.js 前端）两个仓库。
+基于 [Rspress](https://rspress.dev) 构建的 **Pay-Unify 统一支付平台**聚合文档站。
+
+- 在线站点：<https://pay-unify-docs-one.vercel.app>
+- 源码仓库：<https://github.com/difyz9/pay-unify>（单仓：Go 后端 `backend/` + Next.js 控制台 `frontend/`）
+- 镜像：`difyz9/pay-unify`（[Docker Hub](https://hub.docker.com/r/difyz9/pay-unify)，单容器 / 单端口）
+
+## 目录结构
 
 ```
-my_pay/
-├── docs/                      # 本目录：Rspress 文档站
-│   ├── rspress.config.ts      # 站点配置（标题 / 导航 / 侧边栏）
-│   ├── package.json
-│   ├── docs/                  # Markdown 内容（编写文档放这里）
-│   │   ├── index.md           # 首页（hero / features）
-│   │   ├── guide/             # 指南：概览、快速开始
-│   │   ├── backend/           # 后端：认证 / 配置 / API / 支付 / X402 / 证书 / SDK
-│   │   ├── frontend/          # 前端：概览、性能指南
-│   │   ├── deployment/        # 部署：后端、前端
-│   │   └── appendix/          # 附录：资源链接
-│   └── ...
-├── pay-unify-backend/         # 后端仓库
-└── pay-unify-frontend/        # 前端仓库
+pay-unify-docs/
+├── rspress.config.ts      # 站点配置（标题 / 导航 / 侧边栏）
+├── package.json
+├── vercel.json            # Vercel 构建 / 输出参数
+├── docs/                  # Markdown 内容（编写文档放这里）
+│   ├── index.md           # 首页（hero / features）
+│   ├── guide/             # 指南：系统概览、快速开始
+│   ├── backend/           # 后端：认证 / 配置 / API / 支付 / X402 / 证书 / SDK
+│   ├── frontend/          # 前端：概览、性能指南
+│   ├── deployment/        # 部署：Docker 一键部署、环境变量、后端、前端
+│   ├── appendix/          # 附录：相关资源
+│   └── changelog.md       # 更新日志
+└── README.md
 ```
 
 ## 常用命令
@@ -36,22 +40,36 @@ npm run build
 npm run preview
 ```
 
-## 内容同步约定
+## 内容维护约定
 
-`docs/backend/`、`docs/frontend/performance.md`、`docs/changelog.md` 等页面由仓库原生文档同步而来，
-页面顶部标注了源文件路径（如 `pay-unify-backend/docs/AUTHENTICATION.md`）。
-**修改这类内容请先更新仓库内的源文档，再同步到本网站对应页面**，避免双份内容漂移。
+本仓库已是相关文档的**唯一维护源**（原后端 `backend/docs/*.md`、前端 `docs/*.md`
+在单仓重构后不再随 `pay-unify` 仓库发布）。因此：
 
-- 后端仓库文档：`../pay-unify-backend/docs/`
-- 前端仓库文档：`../pay-unify-frontend/docs/`
+- `docs/backend/*`、`docs/frontend/performance.md`、`docs/changelog.md` 等页面**直接在本仓库编辑**，
+  页面顶部的「维护说明」会指向对应的源码位置，实现细节以 `pay-unify` 源码为准。
+- 涉及接口路由的改动，请同步核对 `pay-unify` 仓库 `backend/internal/handler/*.go` 的 `RegisterRoutes`
+  与 `backend/docs/swagger.*`。
+- 涉及部署 / 环境变量的改动，请同步核对仓库根 `Dockerfile`、`docker-compose.yml`、
+  `.env.example`、`backend/internal/core/env_config.go`。
 
-其余页面（`guide/`、`backend/api-overview.md`、`backend/sdk.md`、`frontend/overview.md`、`deployment/`、`appendix/`）为本网站原创内容，
-可直接在本目录编辑。
+新增页面后在 `rspress.config.ts` 的 `themeConfig.nav` / `sidebar` 中登记，否则不会出现在导航中。
+
+## 内容来源速查
+
+| 主题 | 权威位置（pay-unify 仓库） |
+| --- | --- |
+| 项目总览 / Docker 部署 | `README.md`、`docs/dockerhub-overview.md` |
+| 1Panel 打包 | `docs/1panel-packaging-plan.md`、`deploy/1panel/` |
+| 认证 / OAuth2 | `backend/internal/middleware/`、`backend/internal/handler/{login,oauth}_handler.go` |
+| 配置 / 环境变量 | `backend/config.toml.example`、`backend/internal/core/env_config.go` |
+| 统一支付 / PayPal / X402 | `backend/internal/handler/payment_handler.go`、`backend/internal/pkg/service/payment/` |
+| 证书管理 | `backend/internal/handler/payment_cert_handler.go`、`backend/internal/pkg/channel/spec.go` |
+| 前端 | `frontend/src/`（`core/api/baseUrl.ts`、`core/auth/`、`features/`） |
 
 ## 环境要求
 
-- Node.js 18+
-- 可选：Go 1.21+ / MySQL 8.0+（仅本地调试真实接口时需要）
+- Node.js 18+（Vercel 使用 24.x）
+- 可选：Go 1.25+ / MySQL 8.0+（仅本地调试真实接口时需要）
 
 ---
 
@@ -91,6 +109,7 @@ git push origin v1.0.0
 
 5. 之后每次打标签即可自动发布。
 
-> 注意：`.vercel/` 已被 `.gitignore` 忽略，只用于本地获取 id，不要提交。
+> 当前生产域名为 <https://pay-unify-docs-one.vercel.app>。
 > 若 Vercel 项目关联了自定义域名，发布后域名自动指向最新标签版本。
-
+>
+> 注意：`.vercel/` 已被 `.gitignore` 忽略，只用于本地获取 id，不要提交。

@@ -5,7 +5,7 @@ export default defineConfig({
   // 因此 markdown 内容位于 my_pay/docs/docs/）
   title: 'Pay-Unify · 统一支付文档中心',
   description:
-    'pay-unify 统一支付服务：后端 Go (Gin) + 前端 Next.js，覆盖支付宝 / 微信支付 / PayPal / SkillHub X402 的完整支付解决方案文档',
+    'pay-unify 统一支付服务：Go (Gin) 后端 + Next.js 控制台单仓单容器，覆盖支付宝 / 微信支付 / PayPal / SkillHub X402 的完整支付解决方案文档',
   lang: 'zh-CN',
   logoText: 'PayHub Docs',
   themeConfig: {
@@ -28,7 +28,7 @@ export default defineConfig({
       { text: '指南', link: '/guide/overview' },
       { text: '后端', link: '/backend/auth' },
       { text: '前端', link: '/frontend/overview' },
-      { text: '部署', link: '/deployment/backend' },
+      { text: '部署', link: '/deployment/docker' },
       { text: '附录', link: '/changelog' },
     ],
     sidebar: {
@@ -65,6 +65,8 @@ export default defineConfig({
         {
           text: '部署',
           items: [
+            { text: 'Docker 一键部署', link: '/deployment/docker' },
+            { text: '环境变量参考', link: '/deployment/environment' },
             { text: '后端部署', link: '/deployment/backend' },
             { text: '前端部署', link: '/deployment/frontend' },
           ],

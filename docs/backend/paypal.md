@@ -1,4 +1,5 @@
-> **本文档来源**：pay-unify-backend 仓库的 `docs/PAYPAL_INTEGRATION.md`（保持与源码同步的权威版本）。
+> **维护说明**：本文档已并入本站直接维护（单仓重构后原 `backend/docs/*.md`、前端 `docs/*.md` 不再随仓库发布）。
+> 实现细节以 [pay-unify 源码](https://github.com/difyz9/pay-unify) 为准，页面与源码的对应关系见[相关资源](/appendix/resources)。
 > 修改时请先更新仓库内原文件，再同步本页。
 
 # PayPal 集成文档
@@ -28,15 +29,15 @@ Enabled = true                                              # 是否启用PayPal
 SandBox = true                                              # 是否使用沙箱环境
 ClientId = "your-paypal-client-id"                         # PayPal应用ClientID
 Secret = "your-paypal-secret"                               # PayPal应用Secret
-NotifyURL = "https://api.vtranslink.com/api/v1/notify/paypal"  # Webhook通知地址
-ReturnURL = "https://api.vtranslink.com/payment/success"       # 支付成功返回地址
+NotifyURL = "https://api.example.com/api/v1/notify/paypal"  # Webhook通知地址
+ReturnURL = "https://api.example.com/payment/success"       # 支付成功返回地址
 ```
 
 ### 2. PayPal 开发者账号设置
 
 1. 访问 [PayPal Developer](https://developer.paypal.com/)
 2. 创建应用程序获取 ClientID 和 Secret
-3. 配置 Webhook 端点：`https://api.vtranslink.com/api/v1/notify/paypal`
+3. 配置 Webhook 端点：`https://api.example.com/api/v1/notify/paypal`
 4. 启用以下 Webhook 事件：
    - `PAYMENT.CAPTURE.COMPLETED`
    - `CHECKOUT.ORDER.APPROVED`

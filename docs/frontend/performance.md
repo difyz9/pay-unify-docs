@@ -1,4 +1,5 @@
-> **本文档来源**：pay-unify-frontend 仓库的 `docs/FRONTEND_PERFORMANCE_GUIDE.md`（保持与源码同步的权威版本）。
+> **维护说明**：本文档已并入本站直接维护（单仓重构后原 `backend/docs/*.md`、前端 `docs/*.md` 不再随仓库发布）。
+> 实现细节以 [pay-unify 源码](https://github.com/difyz9/pay-unify) 为准，页面与源码的对应关系见[相关资源](/appendix/resources)。
 > 修改时请先更新仓库内原文件，再同步本页。
 
 # ⚡ 前端性能优化指南
@@ -351,9 +352,8 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 60 * 60 * 24 * 7, // 缓存7天
     remotePatterns: [
       {
-        protocol: 'http',
-        hostname: '124.222.202.16',
-        port: '8089',
+        protocol: 'https',
+        hostname: 'api.example.com',
         pathname: '/uploads/**',
       },
     ],
@@ -623,8 +623,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html>
       <head>
         {/* 预连接API服务器 */}
-        <link rel="preconnect" href="http://124.222.202.16:8089" />
-        <link rel="dns-prefetch" href="http://124.222.202.16:8089" />
+        <link rel="preconnect" href="https://api.example.com" />
+        <link rel="dns-prefetch" href="https://api.example.com" />
         
         {/* 预加载关键字体 */}
         <link

@@ -4,11 +4,11 @@ title: SDK 与示例
 
 # SDK 与示例
 
-后端仓库 `pay-unify-backend/examples/` 提供多语言接入素材，前端仓库 `pay-unify-frontend/examples/` 提供 X402 参考实现。
+Pay-Unify 未内置官方 SDK 包，推荐直接使用标准 HTTP 客户端按 **OAuth2 Client Credentials** 接入。
 
-> ⚠️ 认证现状提醒：仓库内 `python_payment_example.py`、`GOLANG_EXAMPLE_README.md` 等**历史示例仍为旧的 GoAuth HMAC 写法**
-> （`X-App-Id / X-Timestamp / X-Sign` 头），后端已全面下线该认证，相关文件仅供参考、**不可直接运行**。
-> 以 OAuth2（`POST /oauth/token` → Bearer）为准，见[认证体系](/backend/auth)。
+> ⚠️ 历史示例提醒：早期仓库内的 `python_payment_example.py`、`golang_payment_example.go` 等示例使用
+> **旧的 GoAuth HMAC 写法**（`X-App-Id / X-Timestamp / X-Sign` 头），后端已全面下线该认证。
+> 当前检出中这些 `examples/` 目录**已不存在**，请以 OAuth2（`POST /oauth/token` → Bearer）为准，见[认证体系](/backend/auth)。
 
 ## 推荐的最小接入（Python，OAuth2）
 
@@ -18,7 +18,7 @@ import requests
 BASE = "http://localhost:8097"          # 后端地址
 # —— 第 1 步：用 API 应用凭证换 Bearer token ——
 r = requests.post(f"{BASE}/oauth/token",
-                  data={
+                  json={
                       "client_id": "test-app-001",                  # 管理后台「API 应用管理」创建
                       "client_secret": "test-secret-key-12345678901234567890",
                       "grant_type": "client_credentials",
@@ -48,52 +48,59 @@ requests.post(f"{BASE}/api/v2/payment/refund",
               json={"orderNo": order_no, "refundAmount": 0.01}).json()
 ```
 
-- 先到「API 应用管理」按需勾选 scope（下单需要 `payment:write`）。
+- 先到「API 应用管理」按需勾选 scope（下单需要 `payment:write`）；生产环境用控制台 `/api/v1/api-apps`（管理员 JWT）创建。
 - 密钥**仅创建 / 轮换时展示一次**，服务端 bcrypt 存储；不要把密钥提交到公开仓库。
-- 生产必须 HTTPS；可配合 IP 白名单与限流使用。
+- token 默认有效期 1 小时，过期重新换发；生产必须 HTTPS，可配合 IP 白名单与限流使用。
 
-## 仓库内示例素材
+> 种子应用 `test-app-001` / `local-test` 仅在 `Debug = true` 环境自动创建，生产不会存在。
 
-### pay-unify-backend/examples/
+## 获取 token 的两种请求格式
 
-| 文件 | 说明 | 状态 |
-| --- | --- | --- |
-| `QUICK_START_SDK.md` | SDK 快速开始（描述 payment-sdk 目录，当前仓库未内置） | ⚠️ 内容过期 |
-| `golang_payment_example.go` | Go 调用示例（注释状态，依赖已移除的 payment-sdk） | ⚠️ 内容过期 |
-| `python_payment_example.py` | Python 全流程示例（HMAC 写法） | ⚠️ 认证过期 |
-| `PYTHON_SDK_SIGNATURE_FIX.md` | 早期签名问题排查记录 | 历史 |
-| `requirements.txt` | Python 依赖 | — |
-| `workwx/main.go` | 企业微信通知的 Go 接入参考 | 有效 |
-
-### pay-unify-frontend/examples/
-
-| 文件 | 说明 | 状态 |
-| --- | --- | --- |
-| `x402-demo.mjs` | **X402 收款最小参考实现**（Node 18+ 零依赖） | ✅ 与当前后端一致 |
+`POST /oauth/token` 同时接受 JSON 与表单：
 
 ```bash
-# X402 Demo 用法
-cd pay-unify-frontend/examples
-BASE_URL=http://localhost:8097 \
-CLIENT_ID=local-test \
-CLIENT_SECRET=local-test-secret-32-chars-here-ok \
-QUERY="epub转txt /path/in.epub" \
-node x402-demo.mjs
+# JSON
+curl -X POST http://localhost:8097/oauth/token \
+  -H 'Content-Type: application/json' \
+  -d '{"grant_type":"client_credentials","client_id":"...","client_secret":"..."}'
+
+# 表单（RFC 6749 标准）
+curl -X POST http://localhost:8097/oauth/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=client_credentials&client_id=...&client_secret=...'
 ```
 
-流程：`POST /oauth/token` 换 token → `POST /api/v2/skillpay/resource` 收到 `402 + L1 支付码`
-→ 用户扫码支付（DevMode 可跳过）→ 带 `X-Out-Trade-No` 重放拿到付费内容（幂等）→ 可选查询 / 退款。
-完整说明见 [X402 / SkillPay](/backend/x402)。
+## X402（SkillPay）接入
 
-## 交互式演示
+X402 是面向 AI Skill 的付费协议，接入步骤：
 
-- **X402 收款案例**：登录后台访问 `/dashboard/x402`，可切换本地 / 生产后端、查看 L1 支付码解析、订单轮询与幂等验证。
-- **API 应用管理**：`/dashboard/api-apps` 创建应用后，弹窗内直接复制 cURL / Python 接入示例。
+```
+① POST /oauth/token                          → Bearer（scope: skillpay:call）
+② POST /api/v2/skillpay/resource             → 首次返回 402 + L1 支付码（WeixinPay-Required）
+③ 用户微信扫码支付（本地 DevMode 可跳过）
+④ POST …/resource（X-Out-Trade-No 请求头）    → 200 + 付费内容（服务端幂等履约）
+⑤ GET  /api/v2/skillpay/query/{outTradeNo}   → 查询订单状态
+⑥ POST /api/v2/skillpay/refund               → 退款
+```
+
+- 完整协议、签名算法与字段说明见 [X402 / SkillPay](/backend/x402)。
+- 控制台页面：登录后访问 `/dashboard/x402`，可切换后端、解析 L1 支付码、轮询订单、验证幂等与退款。
+
+## 交互式接口文档
+
+- **Swagger UI**：浏览器打开 `http://<host>:<port>/swagger/index.html`，可直接试调每个接口。
+- **OpenAPI 定义**：
+  - 运行时：`GET /swagger/doc.json`
+  - 仓库内离线：`backend/docs/swagger.yaml` / `swagger.json` / `docs.go`
+- 「API 应用管理」创建应用后，弹窗内可直接复制 cURL / Python 接入示例。
 
 ## 调试辅助
 
 ```bash
-# 在线 Swagger（含每个接口的请求/响应模型，可试调）
-curl http://localhost:8097/swagger/doc.json     # OpenAPI 定义
-# 浏览器打开 http://localhost:8097/swagger/index.html
+# 服务信息
+curl http://localhost:8097/api/v1/info
+# 三渠道状态（公开）
+curl http://localhost:8097/api/v1/payment/channels
+# 健康检查
+curl http://localhost:8097/health/db
 ```

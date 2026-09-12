@@ -153,16 +153,19 @@ title: API 总览
 
 ## API 应用管理（OAuth2 Client CRUD）
 
-| 方法 | 路径 | 认证 | 说明 |
-| --- | --- | --- | --- |
-| GET | `/api/v2/api-apps` | Bearer + `apiapp:manage` | 应用列表 |
-| GET | `/api/v2/api-apps/:appId` | 同上 | 应用详情 |
-| POST | `/api/v2/api-apps` | 同上 | 创建应用（生成 client_id / secret） |
-| PUT | `/api/v2/api-apps/:appId` | 同上 | 编辑配置 |
-| PUT | `/api/v2/api-apps/:appId/status` | 同上 | 启用 / 禁用 |
-| DELETE | `/api/v2/api-apps/:appId` | 同上 | 删除应用 |
+提供两条并行入口（解决“创建第一个应用”的引导死锁）：
 
-> 前端「API 应用管理」页面（`/dashboard/api-apps`）即操作这些端点；密钥**仅创建 / 轮换时一次性展示**。
+| 方法 | v1 路径（管理员 JWT，控制台） | v2 路径（Bearer + `apiapp:manage`） | 说明 |
+| --- | --- | --- | --- |
+| GET | `/api/v1/api-apps` | `/api/v2/api-apps` | 应用列表 |
+| GET | `/api/v1/api-apps/:appId` | `/api/v2/api-apps/:appId` | 应用详情 |
+| POST | `/api/v1/api-apps` | `/api/v2/api-apps` | 创建应用（生成 client_id / secret） |
+| PUT | `/api/v1/api-apps/:appId` | `/api/v2/api-apps/:appId` | 编辑配置 |
+| PUT | `/api/v1/api-apps/:appId/status` | `/api/v2/api-apps/:appId/status` | 启用 / 禁用 |
+| DELETE | `/api/v1/api-apps/:appId` | `/api/v2/api-apps/:appId` | 删除应用 |
+
+> 控制台「API 应用管理」页面（`/dashboard/api-apps`）走 **v1 管理员 JWT**（无需先持有 API 应用凭证，否则会死锁）；
+> v2 供已授权的外部应用调用。密钥**仅创建 / 轮换时一次性展示**（bcrypt 存储）。
 
 ## SkillPay（SkillHub X402）
 
@@ -209,7 +212,7 @@ title: API 总览
 | `300` | 已关闭（超时自动关单 / 手动关闭） |
 | `400` | 已退款 |
 
-> 前端映射常量见 `pay-unify-frontend/src/constants/options.ts`。过期订单由 `OrderScheduler` 定时任务自动关闭。
+> 前端映射常量见 `frontend/src/constants/options.ts`。过期订单由 `OrderScheduler` 定时任务（每 5 分钟）自动关闭 15 分钟前未支付订单。
 
 ## 常见返回结构
 
