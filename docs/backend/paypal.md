@@ -1,6 +1,5 @@
 > **维护说明**：本文档已并入本站直接维护（单仓重构后原 `backend/docs/*.md`、前端 `docs/*.md` 不再随仓库发布）。
 > 实现细节以 [pay-unify 源码](https://github.com/difyz9/pay-unify) 为准，页面与源码的对应关系见[相关资源](/appendix/resources)。
-> 修改时请先更新仓库内原文件，再同步本页。
 
 # PayPal 集成文档
 
@@ -20,29 +19,33 @@
 
 ### 1. 配置文件设置
 
-在 `config_payment.toml` 中配置 PayPal 相关参数：
+在 `config.toml`（分节 `[PaypalConfig]`）中配置 PayPal 相关参数：
 
 ```toml
-# PayPal配置
+# config.toml
 [PaypalConfig]
 Enabled = true                                              # 是否启用PayPal支付
 SandBox = true                                              # 是否使用沙箱环境
 ClientId = "your-paypal-client-id"                         # PayPal应用ClientID
 Secret = "your-paypal-secret"                               # PayPal应用Secret
-NotifyURL = "https://api.example.com/api/v1/notify/paypal"  # Webhook通知地址
+NotifyURL = "https://api.example.com/api/v1/payment/notify/paypal"  # Webhook通知地址
 ReturnURL = "https://api.example.com/payment/success"       # 支付成功返回地址
 ```
+
+> PayPal 由 `config.toml` 决定（**不支持**控制台热配置），修改后需重启进程。
 
 ### 2. PayPal 开发者账号设置
 
 1. 访问 [PayPal Developer](https://developer.paypal.com/)
 2. 创建应用程序获取 ClientID 和 Secret
-3. 配置 Webhook 端点：`https://api.example.com/api/v1/notify/paypal`
+3. 配置 Webhook 端点：`https://your-domain/api/v1/payment/notify/paypal`
 4. 启用以下 Webhook 事件：
    - `PAYMENT.CAPTURE.COMPLETED`
    - `CHECKOUT.ORDER.APPROVED`
 
 ## API 接口
+
+> `/api/v1/payment/*` 需管理员 JWT 会话，`/api/v2/payment/*` 需 OAuth2 Bearer + `payment:write` scope（见[认证体系](/backend/auth)）。
 
 ### 1. 创建支付订单
 
@@ -80,6 +83,10 @@ ReturnURL = "https://api.example.com/payment/success"       # 支付成功返回
 ### 2. 捕获支付
 
 **接口地址**: `POST /api/v1/payment/paypal/capture/{orderId}`
+
+> ⚠️ 该方法在 Swagger 注解中存在，但当前 `RegisterRoutes` **未注册该路由**；
+> 实际 PayPal 支付由 `GET /api/v1/payment/return/paypal`（同步返回）与
+> `POST /api/{v1,v2}/payment/notify/paypal`（Webhook）完成确认与捕获。
 
 **路径参数**:
 - `orderId`: PayPal订单ID
@@ -223,10 +230,12 @@ PayPal 支持以下20种货币：
 
 ## 相关文件
 
+均在 `backend/` 下：
+
 - `internal/pkg/service/payment/paypal_service.go`: PayPal 服务实现
 - `internal/core/types/config.go`: 配置结构定义
 - `internal/handler/payment_handler.go`: 支付处理器
-- `config_payment.toml`: 配置文件模板
+- `config.toml.example`: 配置模板（`[PaypalConfig]` 分节）
 
 ## 更新日志
 

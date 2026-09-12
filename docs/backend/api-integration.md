@@ -22,11 +22,11 @@
 
 ### 1.1 接口基础信息
 
-- **API Base URL**: `https://api.example.com/api/v2`
-- **协议**: HTTPS
+- **API Base URL**: `https://<your-domain>/api/v2`（示例；本地为 `http://localhost:8097/api/v2`）
+- **协议**: HTTPS（生产必须）
 - **数据格式**: JSON
 - **字符编码**: UTF-8
-- **认证方式**: OAuth2 Client Credentials（`POST /oauth/token` 换 Bearer，见 docs/AUTHENTICATION.md）
+- **认证方式**: OAuth2 Client Credentials（`POST /oauth/token` 换取 Bearer，见 [认证体系](/backend/auth)）
 
 ### 1.2 支持的支付方式
 

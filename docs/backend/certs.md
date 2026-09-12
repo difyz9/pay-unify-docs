@@ -1,6 +1,5 @@
 > **维护说明**：本文档已并入本站直接维护（单仓重构后原 `backend/docs/*.md`、前端 `docs/*.md` 不再随仓库发布）。
 > 实现细节以 [pay-unify 源码](https://github.com/difyz9/pay-unify) 为准，页面与源码的对应关系见[相关资源](/appendix/resources)。
-> 修改时请先更新仓库内原文件，再同步本页。
 
 # 支付证书管理使用指南
 
@@ -57,6 +56,9 @@ type PaymentCert struct {
 ```
 
 ## API 接口
+
+> 以下接口前缀为 `/api/v1`（外部应用对应 `/api/v2`）。`/api/v1/*` 需管理员 JWT 会话，
+> `/api/v2/*` 需 OAuth2 Bearer + `cert:manage` scope。示例中的 `Authorization: Bearer $TOKEN` 请按实际凭证替换。
 
 ### 1. 上传证书（JSON方式）
 
@@ -117,7 +119,8 @@ type PaymentCert struct {
 
 **cURL示例**:
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/upload/file \
+curl -X POST http://localhost:8097/api/v1/certs/upload/file \
+  -H "Authorization: Bearer $TOKEN" \
   -F "name=支付宝应用私钥" \
   -F "certType=alipay" \
   -F "fileType=app_private_key" \
@@ -218,7 +221,8 @@ curl -X POST http://localhost:8080/api/v1/certs/upload/file \
 
 1. **上传应用私钥**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/upload \
+curl -X POST http://localhost:8097/api/v1/certs/upload \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "支付宝应用私钥",
@@ -233,7 +237,8 @@ curl -X POST http://localhost:8080/api/v1/certs/upload \
 
 2. **上传应用公钥证书**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/upload \
+curl -X POST http://localhost:8097/api/v1/certs/upload \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "支付宝应用公钥证书",
@@ -248,7 +253,8 @@ curl -X POST http://localhost:8080/api/v1/certs/upload \
 
 3. **上传支付宝公钥证书**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/upload \
+curl -X POST http://localhost:8097/api/v1/certs/upload \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "支付宝公钥证书",
@@ -263,7 +269,8 @@ curl -X POST http://localhost:8080/api/v1/certs/upload \
 
 4. **上传支付宝根证书**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/upload \
+curl -X POST http://localhost:8097/api/v1/certs/upload \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "支付宝根证书",
@@ -280,7 +287,8 @@ curl -X POST http://localhost:8080/api/v1/certs/upload \
 
 1. **上传商户私钥**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/upload/file \
+curl -X POST http://localhost:8097/api/v1/certs/upload/file \
+  -H "Authorization: Bearer $TOKEN" \
   -F "name=微信商户私钥" \
   -F "certType=wechat" \
   -F "fileType=private_key" \
@@ -291,7 +299,8 @@ curl -X POST http://localhost:8080/api/v1/certs/upload/file \
 
 2. **上传证书序列号**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/upload \
+curl -X POST http://localhost:8097/api/v1/certs/upload \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "微信证书序列号",
@@ -308,14 +317,16 @@ curl -X POST http://localhost:8080/api/v1/certs/upload \
 
 1. **查看当前证书列表**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/list \
+curl -X POST http://localhost:8097/api/v1/certs/list \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"certType": "alipay", "page": 1, "pageSize": 10}'
 ```
 
 2. **上传新证书（不设为默认）**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/upload \
+curl -X POST http://localhost:8097/api/v1/certs/upload \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "支付宝新应用私钥",
@@ -330,12 +341,14 @@ curl -X POST http://localhost:8080/api/v1/certs/upload \
 
 3. **测试新证书无误后，设置为默认**
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/123/default
+curl -X POST http://localhost:8097/api/v1/certs/123/default \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 4. **删除旧证书**
 ```bash
-curl -X DELETE http://localhost:8080/api/v1/certs/1
+curl -X DELETE http://localhost:8097/api/v1/certs/1 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## 代码集成
@@ -416,7 +429,7 @@ func useCertHelper(db *gorm.DB) {
 
 ## Swagger文档
 
-启动服务后，访问 `http://localhost:8080/swagger/index.html` 查看完整的API文档。
+启动服务后，访问 `http://localhost:8097/swagger/index.html` 查看完整的API文档。
 
 ## 注意事项
 
@@ -457,7 +470,8 @@ MIIEpAIBAAKCAQEA...
 
 检查证书是否设置为默认：
 ```bash
-curl -X POST http://localhost:8080/api/v1/certs/:id/default
+curl -X POST http://localhost:8097/api/v1/certs/:id/default \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## 后续优化

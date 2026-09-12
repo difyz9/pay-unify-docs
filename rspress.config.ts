@@ -1,8 +1,7 @@
 import { defineConfig } from 'rspress/config';
 
 export default defineConfig({
-  // 内容目录默认取 <root>/docs（本文件位于 my_pay/docs/rspress.config.ts，
-  // 因此 markdown 内容位于 my_pay/docs/docs/）
+  // 内容目录默认取 <root>/docs（markdown 内容位于本仓库 docs/ 下）
   title: 'Pay-Unify · 统一支付文档中心',
   description:
     'pay-unify 统一支付服务：Go (Gin) 后端 + Next.js 控制台单仓单容器，覆盖支付宝 / 微信支付 / PayPal / SkillHub X402 的完整支付解决方案文档',
@@ -21,7 +20,7 @@ export default defineConfig({
     docFooter: { prev: '上一页', next: '下一页' },
     footer: {
       message:
-        'PayHub Docs · Pay-Unify 统一支付平台文档 · 由仓库 docs/ 同步维护',
+        'PayHub Docs · Pay-Unify 统一支付平台文档 · 由 pay-unify-docs 仓库维护',
     },
     nav: [
       { text: '首页', link: '/' },

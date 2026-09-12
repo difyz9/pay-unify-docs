@@ -1,263 +1,161 @@
 > **维护说明**：本文档已并入本站直接维护（单仓重构后原 `backend/docs/*.md`、前端 `docs/*.md` 不再随仓库发布）。
 > 实现细节以 [pay-unify 源码](https://github.com/difyz9/pay-unify) 为准，页面与源码的对应关系见[相关资源](/appendix/resources)。
-> 修改时请先更新仓库内原文件，再同步本页。
 
 # 配置文件使用说明
 
-本项目包含以下配置文件：
+配置位于 `backend/` 目录。**所有配置项均可被环境变量覆盖**（优先级：环境变量 > `config.toml` > 内置默认值），
+完整环境变量清单见[环境变量参考](/deployment/environment)。
 
 ## 配置文件列表
 
-### 1. `config.toml.example` ✅ 示例配置文件
-- **用途**: 配置模板，包含所有可配置项的说明
-- **状态**: 已纳入版本控制
-- **说明**: 所有敏感信息已替换为占位符，安全可分享
-
-### 2. `config-dev.toml` ⚠️ 开发配置文件
-- **用途**: 开发环境的配置示例
-- **状态**: 已纳入版本控制
-- **说明**: 仅供参考，不包含真实生产密钥
-
-### 3. `config.toml` 🔒 实际配置文件
-- **用途**: 实际使用的配置文件
-- **状态**: **已添加到 .gitignore，不会被提交**
-- **说明**: 包含真实密钥和密码，必须保密
+| 文件 | 用途 | 状态 |
+| --- | --- | --- |
+| `config.toml.example` | 配置模板，含全部可配置项注释，敏感信息为占位符 | ✅ 纳入版本控制 |
+| `config-local.toml` | 本地开发配置（`Listen = ":8097"`，`Debug = true`，使用 `config-local.toml` 启动） | ✅ 纳入版本控制 |
+| `config-dev.toml` | 开发环境示例（`Listen = ":8089"`） | ✅ 纳入版本控制 |
+| `config.toml` | 实际运行配置（可能含真实密钥） | 🔒 已 `.gitignore` |
 
 ## 快速开始
 
-### 方式一：使用示例配置（推荐）
-
 ```bash
-# 1. 复制示例配置文件
-cp config.toml.example config.toml
-
-# 2. 编辑配置文件，填入真实的配置信息
-vim config.toml  # 或使用您喜欢的编辑器
-
-# 3. 必须修改的配置项：
-#    - MysqlDns: 数据库连接
-#    - Session.SecretKey: Session 密钥
-#    - JWT.SecretKey: JWT 密钥
-#    - Auth.PasswordSalt: 密码盐值
-#    - 支付配置（至少一种）
+cd backend
+cp config.toml.example config.toml   # 然后填入真实配置
+# 或本地开发直接用：CONFIG_FILE=config-local.toml go run main.go
 ```
 
-### 方式二：使用开发配置
+必须修改的配置项：
 
-```bash
-# 1. 复制开发配置文件
-cp config-dev.toml config.toml
-
-# 2. 根据需要修改配置
-vim config.toml
-```
+- `MysqlDns`（或 `DBDriver` + `PostgresDsn`）；
+- `[JWT] SecretKey`（`openssl rand -hex 32`，< 16 字节拒绝启动）；
+- `[Auth] AdminUsername` / `AdminPassword`（仅首次建库生效）；
+- 至少一种支付渠道（或后续在控制台热配置）。
 
 ## 配置项说明
 
-### 必须配置项 ⚠️
+### 顶层
 
-这些配置项必须正确设置才能运行服务：
+```toml
+Listen = ":8097"                 # 监听地址（容器内镜像默认 :8080）
+Version = "1.0.0"
+Debug = false                    # true 时才会创建测试用种子 API 应用
+MysqlDns = "user:pass@tcp(127.0.0.1:3306)/payment_db?charset=utf8mb4&collation=utf8mb4_unicode_ci&parseTime=True&loc=Local"
+# DBDriver = "postgres"
+# PostgresDsn = "host=127.0.0.1 port=5432 user=postgres password=... dbname=payment_db sslmode=disable"
+```
 
-1. **数据库连接** (`MysqlDns`)
-   ```toml
-   MysqlDns = "username:password@tcp(host:port)/database?charset=utf8mb4&parseTime=True&loc=Local"
-   ```
+### `[JWT]` 管理员会话
 
-2. **Session 密钥** (`Session.SecretKey`)
-   ```toml
-   [Session]
-   SecretKey = "至少32位的随机字符串"
-   ```
+```toml
+[JWT]
+SecretKey = "replace-with-openssl-rand-hex-32-jwt-secret"  # < 16 字节拒绝启动，< 32 字节告警
+ExpirationHours = 24
+```
 
-3. **JWT 密钥** (`JWT.SecretKey`)
-   ```toml
-   [JWT]
-   SecretKey = "至少32位的随机字符串"
-   ```
+### `[Auth]` 登录策略与初始管理员
 
-4. **密码加密盐值** (`Auth.PasswordSalt`)
-   ```toml
-   [Auth]
-   PasswordSalt = "您的唯一盐值字符串"
-   ```
+```toml
+[Auth]
+MaxLoginAttempts = 5
+LockoutDuration = 1800     # 秒；锁定记录在进程内存，重启即解锁
+EnableRegister = true      # 生产建议 false
+AdminUsername = "admin"    # 仅首次建库生效，可用 PAY_ADMIN_USERNAME 覆盖
+AdminPassword = "admin123" # 仅首次建库生效，可用 PAY_ADMIN_PASSWORD 覆盖
+```
 
-### 支付配置
+### `[OAuth]` 商户令牌
 
-至少启用一种支付方式：
+```toml
+[OAuth]
+AccessTokenTTL = 3600      # 秒（默认 1 小时）
+Issuer = "pay-unify"
+```
 
-#### 支付宝配置
+### 支付渠道
+
+#### `[AlipayConfig]`（证书模式，4 个证书位）
+
 ```toml
 [AlipayConfig]
-Enabled = true
-SandBox = false  # 生产环境设为 false
-AppId = "您的支付宝应用ID"
-PrivateKey = "/path/to/certs/alipay/privateKey.txt"
-# ... 其他配置
+Enabled = false
+SandBox = true
+AppId = "your_alipay_app_id"
+PrivateKey = "/etc/certs/alipay/privateKey.txt"
+PublicKey = "/etc/certs/alipay/appCertPublicKey.crt"
+AlipayPublicKey = "/etc/certs/alipay/alipayCertPublicKey.crt"
+RootCert = "/etc/certs/alipay/alipayRootCert.crt"
+NotifyURL = "https://api.example.com/api/v1/payment/notify/alipay"
+ReturnURL = "https://api.example.com/payment/return"
 ```
 
-#### 微信支付配置
+#### `[WechatPayConfig]`（微信支付 v3）
+
 ```toml
 [WechatPayConfig]
-Enabled = true
-AppId = "您的微信AppId"
-MchId = "您的商户号"
-# ... 其他配置
+Enabled = false
+AppId = "your_wechat_app_id"
+MchId = "your_merchant_id"
+SerialNo = "your_certificate_serial_number"
+PrivateKey = "/etc/certs/wechat/apiclient_key_pkcs8.pem"
+ApiV3Key = "0123456789abcdef0123456789abcdef"
+NotifyURL = "https://api.example.com/api/v1/payment/notify/wechat"
+AutoVerifySign = false
+StrictNotifyVerify = false
 ```
 
-#### PayPal 配置
+#### `[PaypalConfig]`（始终由 config.toml 决定，不支持热配置）
+
 ```toml
 [PaypalConfig]
-Enabled = true
-SandBox = false  # 生产环境设为 false
-ClientId = "您的PayPal ClientId"
-Secret = "您的PayPal Secret"
+Enabled = false
+SandBox = true
+ClientId = "your_paypal_client_id"
+Secret = "your_paypal_secret"
+NotifyURL = "https://api.example.com/api/v1/payment/notify/paypal"
+ReturnURL = "https://api.example.com/payment/success"
 ```
 
-### 可选配置
+> **配置优先级**：支付宝 / 微信以数据库 `tb_payment_config` 为准（控制台热配置）；
+> DB 无对应行时回退 `config.toml`（老部署兼容）；PayPal 始终由 `config.toml` 决定。
 
-所有支付方式都是可选的，您可以根据业务需求选择启用：
+### 其他分节
 
-- **支付宝**: 适合国内用户
-- **微信支付**: 适合国内用户，特别是移动端
-- **PayPal**: 适合国际用户
-
-建议至少启用一种支付方式。
+| 分节 | 关键项 | 说明 |
+| --- | --- | --- |
+| `[SkillHubConfig]` | `Enabled` / `DeveloperId` / `PubKeyId` / `PrivateKey` / `SkillId` / `PriceAmount` / `DevMode` | SkillHub X402 付费能力，见 [X402](/backend/x402) |
+| `[MembershipTokenConfig]` | `SignMode` / Ed25519 密钥路径 / `LegacyHMACFallback` | 会员令牌签名（Ed25519，兼容 HMAC 回退） |
+| `[WorkWechatConfig]` | `CorpID` / `AgentID` / 通知目标 | 企业微信通知，见[企业微信通知](/backend/work-wechat) |
 
 ## 安全建议
 
-### 1. 密钥生成
-
-使用随机字符串作为密钥：
-
-```bash
-# 生成随机密钥（Linux/Mac）
-openssl rand -hex 32
-
-# 或使用 Python
-python3 -c "import secrets; print(secrets.token_hex(32))"
-
-# 或使用在线工具
-# https://www.random.org/strings/
-```
-
-### 2. 证书文件
-
-将支付平台的证书文件放在正确位置：
-
-```
-certs/
-├── alipay/
-│   ├── privateKey.txt
-│   ├── appCertPublicKey.crt
-│   ├── alipayCertPublicKey.crt
-│   └── alipayRootCert.crt
-└── wechat/
-    └── apiclient_key_pkcs8.pem
-```
-
-### 3. 权限设置
-
-```bash
-# 设置配置文件权限（仅所有者可读写）
-chmod 600 config.toml
-
-# 设置证书文件权限
-chmod 600 certs/alipay/*
-chmod 600 certs/wechat/*
-```
-
-### 4. 环境区分
-
-- **开发环境**: 使用沙箱模式 (`SandBox = true`)
-- **测试环境**: 使用独立的数据库和支付账号
-- **生产环境**: 
-  - `SandBox = false`
-  - `Debug = false`
-  - 使用 HTTPS
-  - 启用防火墙
+1. **密钥生成**：`openssl rand -hex 32`；`config.toml` 权限 `chmod 600`。
+2. **证书**：可放入 `certs/` 目录，或全部改用[证书管理](/backend/certs) Web 上传，自动落盘 `runtime/certs/`：
+   ```
+   certs/
+   ├── alipay/   # privateKey / appCertPublicKey / alipayCertPublicKey / alipayRootCert
+   └── wechat/   # apiclient_key_pkcs8.pem
+   ```
+3. **环境区分**：开发用 `SandBox = true`；生产 `SandBox = false`、`Debug = false`、HTTPS。
+4. **容器部署**：推荐用环境变量 + `CONFIG_FILE=/app/runtime/config.toml`（首次启动自生成随机 JWT 密钥），见 [Docker 一键部署](/deployment/docker)。
 
 ## 常见问题
 
-### Q1: config.toml 会被提交到 Git 吗？
+**Q：`config.toml` 会被提交到 Git 吗？**
+不会，已加入 `.gitignore`。可用 `git check-ignore -v config.toml` 验证。
 
-**不会**。`config.toml` 已添加到 `.gitignore`，不会被 Git 跟踪。
+**Q：多环境如何管理配置？**
+用不同配置文件 + `CONFIG_FILE` 指定，或直接用环境变量覆盖（`PAY_*` / `PANEL_DB_*`）。
 
-验证方法：
-```bash
-git check-ignore -v config.toml
-# 应该显示: .gitignore:11:config.toml    config.toml
-```
-
-### Q2: 如何在服务器上部署配置？
-
-在服务器上手动创建 `config.toml`：
-
-```bash
-# 方式1: 从本地上传（注意安全）
-scp config.toml user@server:/path/to/project/
-
-# 方式2: 在服务器上创建
-ssh user@server
-cd /path/to/project
-vim config.toml  # 手动填写配置
-```
-
-### Q3: 多环境如何管理配置？
-
-建议使用环境变量或配置管理工具：
-
-```bash
-# 开发环境
-cp config-dev.toml config.toml
-
-# 测试环境
-cp config-test.toml config.toml
-
-# 生产环境
-cp config-prod.toml config.toml
-```
-
-或使用符号链接：
-```bash
-ln -s config-prod.toml config.toml
-```
-
-### Q4: 忘记修改配置项会怎样？
-
-服务启动时会进行配置验证：
-- 缺少必要配置会报错并退出
-- 支付配置错误会导致支付失败
-- 建议启动后测试所有功能
-
-## 配置验证
-
-启动服务前验证配置：
-
-```bash
-# 启动服务
-go run main.go
-
-# 查看日志
-tail -f logs/app.log
-
-# 检查配置是否加载成功
-# 应该看到类似输出：
-# [INFO] 配置文件加载成功
-# [INFO] 数据库连接成功
-# [INFO] 支付宝配置已启用
-```
-
-## 配置文件模板
-
-如需自定义配置模板，可参考 `config.toml.example` 文件中的注释说明。
+**Q：忘记修改配置项会怎样？**
+服务启动时会做配置校验：缺少必要配置会报错退出；`JWT.SecretKey` 过短会拒绝启动；
+支付配置不全会导致对应渠道 `configured=false`，下单被拒绝。可在 `GET /api/v1/payment/channels` 查看渠道状态。
 
 ---
 
 ## 获取帮助
 
-如有配置问题：
-1. 查看 [README.md](README.md) 快速开始部分
-2. 查看 [docs/API_DOC.md](docs/API_DOC.md) API 文档
-3. 提交 Issue: https://github.com/difyz9/pay-unify/issues
+- [环境变量参考](/deployment/environment)
+- [Docker 一键部署](/deployment/docker)
+- [认证体系](/backend/auth)、[证书管理](/backend/certs)
+- 提交 Issue：<https://github.com/difyz9/pay-unify/issues>
 
 **请不要在 Issue 中泄露真实的密钥和密码！**

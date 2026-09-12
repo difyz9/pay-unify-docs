@@ -1,6 +1,5 @@
 > **维护说明**：本文档已并入本站直接维护（单仓重构后原 `backend/docs/*.md`、前端 `docs/*.md` 不再随仓库发布）。
 > 实现细节以 [pay-unify 源码](https://github.com/difyz9/pay-unify) 为准，页面与源码的对应关系见[相关资源](/appendix/resources)。
-> 修改时请先更新仓库内原文件，再同步本页。
 
 # ⚡ 前端性能优化指南
 
